@@ -1,0 +1,252 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: usbkbd.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)usbkbd.tok 1.6 03/05/12
+purpose: 
+copyright: Copyright 1997-2001, 2003 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+Fcode-version2
+
+: disable-int-transactions  ( token -- toggle )
+   " disable-int-transactions" $call-parent
+;
+
+: enable-int-transactions
+	( ms tgl lo-spd? dir max-pkt buf-len endp usb-adr -- token )
+   " enable-int-transactions" $call-parent
+;
+
+: execute-control
+	( lo-spd? dir max-pkt buf-adr buf-len req-adr req-len endp usb-adr
+							-- hw-err? | stat 0 )
+   " execute-control" $call-parent
+;
+
+: execute-1-interrupt
+	( tgl1 lo-spd? dir max-pkt buf-adr buf-len endp usb-adr
+					-- tgl2 hw-err? | tgl2 stat 0 )
+   " execute-1-interrupt" $call-parent
+;
+
+: int-transaction-status  ( buf-adr token -- hw-err? | stat 0 )
+   " int-transaction-status" $call-parent
+;
+
+\ XXX should have stubs for the other usb words too, I suppose.
+
+
+headerless
+
+0 instance value kbd-package
+
+\ We didn't use interpose so we use call-methods instead.
+\ This sucks.. but until the pathname part of interpose works
+\ properly we need to live with this ick.
+\
+: .call-kbd ( str,len -- XXX? ) kbd-package $call-method ;
+
+:  kbd-convert ( key# alt shft -- entry )
+    " convert" .call-kbd
+;
+
+external
+
+: dma-alloc  ( size -- virt )  " dma-alloc" $call-parent  ;
+: dma-free   ( virt size -- )  " dma-free"  $call-parent  ;
+\ No dma-map-in for the bus on which this lives can return a 0 address,
+\ or code and chip will break.
+
+: dma-map-in  ( virt size cacheable? -- devadr )
+   " dma-map-in" $call-parent
+;
+
+: dma-map-out  ( virt devadr size -- )
+   " dma-map-out" $call-parent
+;
+
+: dma-sync  ( virt devadr size -- )
+   " dma-sync" $call-parent
+;
+
+
+: le-w@  ( addr -- w )  dup c@ swap char+ c@ bwjoin  ;
+
+: le-w!  ( w addr -- )  >r  wbsplit r@ char+ c!  r> c!  ;
+
+: le-l@  ( addr -- l )  dup le-w@  swap wa1+ le-w@  wljoin  ;
+
+: le-l!  ( l addr -- )  >r  lwsplit r@ wa1+ le-w!  r> le-w!  ;
+
+headerless
+
+: $= ( adr,len adr,len -- flag )
+   rot tuck = if                      ( adr1 adr2 len )
+      comp invert                     ( flag )
+   else                               ( adr1 adr2 len )
+      3drop false                     ( false )
+   then                               ( flag )
+;
+
+: silent-type-cr
+   diagnostic-mode? if type cr else  2drop  then
+;
+
+fload ${BP}/dev/serial/keyboard/buffer.fth
+fload ${BP}/dev/serial/keyboard/options.fth
+fload ${BP}/dev/serial/keyboard/mutex.fth
+fload ${BP}/pkg/keyboard/keycodes.fth
+
+fload ${BP}/dev/usb-devices/kbd/usbdefs.fth
+fload ${BP}/dev/usb-devices/kbd/usbdescr.fth
+fload ${BP}/dev/usb-devices/kbd/usbdebug.fth
+
+fload ${BP}/dev/usb-devices/kbd/usbkeyin.fth
+fload ${BP}/dev/usb-devices/kbd/usbutils.fth
+
+fload ${BP}/dev/usb-devices/kbd/kbdutils.fth 
+fload ${BP}/dev/usb-devices/kbd/probe.fth
+
+
+instance variable kbd-alarm-running?
+
+: poll-input ( -- )
+   mutex-enter if exit then		( )
+
+   poll-usb if
+     false to forced-keyboard-mode?
+     clear-keyboard
+     mutex-exit
+     user-abort
+   else
+     mutex-exit
+   then					( )
+;
+
+
+: set-alarm ( interval -- )
+  kbd-alarm-running? over if on else off then	( interval )
+  ['] poll-input swap alarm
+;
+
+
+\ Return true if there were no errors during the open process,
+\ otherwise return false.
+\
+: usb-keyboard-open     ( -- okay? )
+
+  false to forced-keyboard-mode?		( )
+  kbd-alarm-running? off			( )
+  mutex-enter drop mutex-exit			( )
+
+  my-args					( str,len )
+  dup if					( str,len )
+     \ We have some args to scan
+     2dup " forcemode" $= if			( str,len )
+        " Force Keyboard Mode: Using input device USB keyboard anyway."
+        silent-type-cr
+        true to forced-keyboard-mode?		( str,len )
+     then					( str,len )
+  then 2drop					( )
+
+  alloc-vaddr-buffs				( )
+  set-oftused-buf-offsets			( )
+
+  install-device				( everything-ok? )
+;
+
+: usb-keyboard-close  ( -- )
+  makesure-kbdints-off  ( )
+  dealloc-vaddr-buffs
+;
+
+headers
+
+: init-kbd-package  ( -- okay? )
+   my-args  " kbd-translator" $open-package to kbd-package
+   kbd-package  if
+      true
+   else
+     ." Can't open USB keyboard package"  cr  false
+   then
+;
+
+external
+
+: read  ( adr len -- #read )  read-bytes ;
+\ : write  ( adr len -- #written )  " write" kbd-package $call-method  ;
+: write  ( adr len -- #written )  ;
+
+: open  ( -- ok? )
+   usb-keyboard-open if 
+      init-kbd-package
+   else 
+      false
+   then
+;
+
+: close  ( -- )
+   kbd-package  close-package
+   usb-keyboard-close
+;
+
+: reset  ( -- )  ;
+: selftest  ( -- error )  false  ;
+
+: remove-abort  ( -- ) kbd-alarm-running? @ if 0 set-alarm then ;
+: install-abort  ( -- ) remove-abort d# 10 set-alarm ;
+
+: ring-bell  ( -- )  ring-keyboard-bell ;
+
+: kbd-dropin&id ( -- magic$ dropin$ layoutid )
+   " UKBD" " usbkbds" get-kbd-cntry-id
+;
+
+' kbd-convert is convert
+
+headers
+
+: ss  ( -- )  		\ XXX for debugging
+   cr ." quit " 
+   " quit" $find drop execute
+;
+
+end0

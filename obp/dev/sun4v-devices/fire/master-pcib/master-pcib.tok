@@ -1,0 +1,79 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: master-pcib.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)master-pcib.tok 1.1 06/02/16 
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+fcode-version3
+
+hex
+
+headerless
+
+: en+ ( xdr,len int -- xdr',len' )  encode-int encode+  ;
+
+h# 3f  encode-int                       \ JBC
+h# 3e  en+                              \ PCI-E
+" interrupts" property
+
+1               encode-int " #interrupt-cells" property
+h# fff000	encode-int
+0		en+
+0		en+
+7		en+  " interrupt-map-mask" property
+
+: <fire> ( xdr,len unit intr -- xdr,len )
+   >r 0 0 rot					( pa.lo pa.mid unit )
+   dup h# f and h# 100 *			( pa.lo pa.mid pa.hi' )
+   swap 4 >> h# f and h# 800 * +		( pa.lo pa.mid pa.hi' )
+   h# 20000 +                                   ( pa.lo pa.mid pa.hi' )
+   rot >r swap >r                               ( pa.hi )
+   en+ r> en+ r> en+ r> en+                     ( xdr,len )
+   my-self ihandle>phandle en+                  ( xdr,len )
+;
+
+0 0 encode-bytes
+4 0 do  0.0 i 1+ <fire> 14 i + en+ loop     \ PCI-X Port 0
+" interrupt-map" property
+
+end0

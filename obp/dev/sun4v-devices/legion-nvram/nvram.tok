@@ -1,0 +1,150 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: nvram.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)nvram.tok 1.1 06/02/16
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+Fcode-Version3
+
+" nvram" 		device-name 
+" nvram" 		device-type
+
+my-space encode-int	" reg"  property
+
+headerless
+
+0	constant  nvraw-base
+h# 1fe0	constant  /nvraw-region
+
+0	constant  nvfixed-base
+h# 40	constant  /nvfixed-region
+
+nvfixed-base /nvfixed-region +	constant  nvhash-base
+h# 1ee0				constant  /nvhash-region
+
+nvhash-base /nvhash-region +	constant  keystore-base 
+h# 100				constant  /keystore-region
+
+
+0 instance value  psize		\ Partition size
+0 instance value  basepos	\ Absolute offset of this partition
+0 instance value  filepos	\ Current position in partition
+
+h# 70 constant nvram-read-fun
+h# 71 constant nvram-write-fun
+
+h# 80 constant fast-trap
+
+-1 h# 1fff - constant page#mask
+
+: >ra ( va -- ra )
+   dup >physical drop   	( vaddr papage )
+   swap page#mask invert and or	( ra )
+;
+
+: hget ( offset buf,len fun# trap# -- len status )
+   >r >r swap >ra swap		( offset raddr len )
+   \ 3 args in, 2 out
+   3 2 r> r> htrap		( len status )( R:  )
+;
+
+alias hput hget
+
+: nvram-read ( offset addr len -- #bytes errno )
+   nvram-read-fun fast-trap hget
+;
+
+: nvram-write ( offset addr len -- #bytes errno )
+   nvram-write-fun fast-trap hput
+;
+
+: $=  ( adr,len adr2,len -- same? )
+   rot tuck <> if  3drop false exit  then  comp 0=
+;
+
+: clip-range ( len -- len' )  psize filepos - min  ;
+: bump-pos   ( n -- )         filepos + psize min to filepos  ;
+
+external
+
+: open ( -- true )
+   nvhash-base /nvhash-region
+   my-args " fixed" $= if 2drop nvfixed-base /nvfixed-region then
+   my-args " keys"  $= if 2drop keystore-base /keystore-region then
+   my-args " raw"   $= if 2drop nvraw-base /nvraw-region then
+   to psize  to basepos				( )
+   0 to filepos					( )
+   true						( true )
+;
+
+: close  ( -- ) ;
+
+: sync   ( -- )  ;
+
+: seek ( lo hi -- fail? )
+   drop	 dup 0<	 if  psize +  then			( offset )
+   dup 0 psize within if			( offset )
+      to filepos  false				( false )
+   else						( offset )
+      drop true 				( true )
+   then						( failed? )
+;
+
+: read ( adr len -- len' )
+   clip-range  basepos filepos +  -rot  nvram-read  if
+      drop 0
+   then
+   dup bump-pos
+;
+
+: write ( adr len -- len' )
+   clip-range  basepos filepos + -rot  nvram-write  if
+      drop 0
+   then
+   dup bump-pos
+;
+
+\ return the number of bytes available..
+: size ( -- n )	 psize filepos - ;
+
+end0

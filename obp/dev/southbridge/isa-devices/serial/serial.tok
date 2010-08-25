@@ -1,0 +1,118 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: serial.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)serial.tok 1.6 06/02/16
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+Fcode-Version3
+
+headerless
+h# 8            constant tty-size
+h# 1            constant #channels
+my-address      constant tty-base
+
+" serial"	2dup name
+( serial )	device-type
+[ifdef] su16552?
+" su16552"	encode-string " su16550" encode-string encode+
+[else]
+" su16550"	encode-string
+[then]
+" su"		encode-string encode+ " compatible" property
+
+1 encode-int    " interrupts" property
+
+: en+ ( xdr,len int -- xdr',len' ) encode-int encode+ ;
+
+\ Phys.hi		Phys.lo		Size
+\ -------		-------		----
+my-space encode-int	tty-base en+	tty-size en+ " reg" property
+
+fload ${BP}/dev/utilities/get-option.fth
+
+: default-tty-mode     " 9600,8,n,1,-" ;
+: default-rmc-mode     " 115200,8,n,1,-" ;
+: (default-ttya-mode)  " ttya-mode" default-tty-mode  get-string-option ;
+: (default-ttyb-mode)  " ttyb-mode" default-tty-mode  get-string-option ;
+
+defer default-ttya-mode
+defer default-ttyb-mode
+
+: $=  ( adr1 len1 adr2 len2 -- equal? )
+   rot tuck  <>  if  3drop false exit  then   ( adr1 adr2 len1 )
+   comp 0=
+;
+
+: init-tty ( -- )
+   " console" get-my-property 0=  if
+      decode-string 2swap 2drop
+      2dup " ttya" $= if
+         2drop
+         ['] (default-ttya-mode)
+      else 
+         " rmc" $= if
+            ['] default-rmc-mode
+         else
+            ['] (default-ttyb-mode)
+         then 
+      then
+   else
+      ['] default-tty-mode
+   then
+   dup  to default-ttya-mode  to default-ttyb-mode
+;
+init-tty
+
+fload ${BP}/dev/serial/mode-data.fth
+[ifdef] hw-flow-ctrl?
+   fload ${BP}/dev/serial/su16550/jbos/io.fth
+[else]
+   fload ${BP}/dev/serial/su16550/io.fth
+[then]
+fload ${BP}/dev/serial/mode-decode.fth
+d# 115200 is max-baud
+fload ${BP}/dev/serial/ttydriver.fth
+
+: write ( adr len -- #written ) uwrite ;
+
+end0

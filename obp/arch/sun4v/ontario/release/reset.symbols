@@ -1,0 +1,15 @@
+# This is a machine generated file
+reset-vector: 0
+sccs-string: e0
+boot-name$: 114
+obp-name$: 120
+setup-itlb-entry: 124
+setup-dtlb-entry: 164
+setup-i/d-tlbs: 1a4
+save-reset-state: 218
+error-reset-recovery: 484
+puts: 4f4
+puthex: 528
+find-drop-in: 534
+find&copy-dropin: 5ec
+power-on-reset: 758

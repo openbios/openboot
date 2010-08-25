@@ -1,0 +1,91 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: svc-channel.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)svc-channel.tok 1.1 06/02/16
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+Fcode-Version3
+
+headerless
+
+0 value my-node
+0 value my-svc-node
+
+fload ${BP}/dev/sun4v-devices/utilities/pd-vd-methods.fth
+find-mynode is my-node
+
+: service-link-required-prop ( prop-name$ -- val )
+   my-node >r
+   my-svc-node is my-node
+   required-prop
+   r> is my-node
+;
+
+my-node if
+
+  \ load the configuration data from the node description
+  my-space 				encode-int 	" reg" 		property
+  " compatible" 	required-prop 	encode-string	" glvc"	encode-string
+  					encode+		" compatible" 	property
+  " name" 		required-prop	encode-string	" name" 	property
+
+  " fwd"		required-prop	is  my-svc-node
+
+  " ino"  ascii v  my-svc-node  pdget-prop if
+      1					encode-int	" interrupts" property
+  then
+
+  \ get these from service linked node:
+  " flags"	service-link-required-prop encode-int	" flags"	property
+  " mtu"	service-link-required-prop encode-int 	" mtu" 		property
+  " sid"	service-link-required-prop encode-int	" channel#"	property
+
+else
+  my-space
+  cmn-error[ " Failed to create properties for device with unit space = %d." cmn-append
+             " "n"r"tFailed to find matching node in the Machine Description " 
+  ]cmn-end
+
+then
+
+end0

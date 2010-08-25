@@ -1,0 +1,87 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: southusb.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)southusb.tok 1.5 05/11/21
+purpose: 
+copyright: Copyright 2005 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+Fcode-version2
+
+headers
+hex
+
+\ XXX hack to take care of addressing bug in cmd hardware:
+my-address my-space h# 200.0010 + h# 1000000 " map-in" $call-parent
+h# 1000000 " map-out" $call-parent
+
+" usb" encode-string  " name" property
+\ " SUNW" encode-string  " manufacturer" property
+
+fload ${BP}/dev/pci/config-access.fth
+
+fload ${BP}/dev/pci/compatible.fth
+make-compatible-property
+
+headers
+
+1 encode-int " #address-cells" property
+0 encode-int " #size-cells" property
+
+my-address my-space encode-phys
+0 encode-int encode+  0 encode-int encode+		\ config space
+my-address my-space h# 0200.0000 or h# 10 or encode-phys encode+
+\ 0 encode-int encode+  h# 1000 encode-int encode+	\ registers in mem
+\ XXX hack to handle bug in cmd hardware
+0 encode-int encode+  h# 1000000 encode-int encode+	\ registers in mem
+" reg" property
+
+\ Should be in the ohci file:
+h# ffff encode-int " maximum-frame#" property
+
+
+: copyright  ( -- adr len )  " Copyright 2005 Sun Microsystems, Inc."  ;
+
+: south-id  ( -- adr len )  " 1.5 05/11/21"  ;
+
+fload ${BP}/dev/southbridge/usb/usbload.fth
+
+end0

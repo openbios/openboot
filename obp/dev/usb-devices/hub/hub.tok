@@ -1,0 +1,87 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: hub.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)hub.tok 1.4 00/05/19
+purpose: 
+copyright: Copyright 1998-2000 Sun Microsystems, Inc.  All Rights Reserved
+
+\ This is for chapter 11 hubs.  One control endpoint 0 and one interrupt
+\ endpoint 1 for change reports.  This is not for combined devices, etc.
+
+Fcode-version2
+
+headers
+hex
+
+1 encode-int " #address-cells" property
+0 encode-int " #size-cells" property
+
+fload ${BP}/dev/usb-devices/hub/hub-gen.fth
+fload ${BP}/dev/usb-devices/hub/packets.fth
+fload ${BP}/dev/usb-devices/hub/hub-requests.fth
+fload ${BP}/dev/usb-devices/hub/hub-control.fth
+fload ${BP}/dev/usb-devices/hub/hub-required.fth
+fload ${BP}/dev/usb-devices/hub/bad-dev.fth
+fload ${BP}/dev/usb-devices/hub/probe.fth
+
+end0
+
+\ "Universal Serial Bus Specification" Revision x.y is referred to
+\ as usbx.y, USBx.y, usb x.y, USB x.y in these files.
+\ When a sequence such as 1.2.3.4.5 follows such a reference in these
+\ files, it indicates a particular section of that specification.
+
+\ There can be differences between what usbx.y says and what actual
+\ USB devices do.  In order to accomodate actual devices, there are
+\ fragments of code that do something differently from usbx.y.  When
+\ this is known, such a fragment is marked in the code with phrases such
+\ as "balky device", "should not have to ...", "shouldn't have to ...",
+\ "may not be needed", and so on.
+
+\ "USB Hardware & Software", by John Garney, et al, is referred to in
+\ these files as "the book".  When followed by a sequence of numbers
+\ such as 1.2.3.4, a particular section of this reference is indicated.
+\ When followed by a phrase such as "page 23", information on page 23
+\ of this book is indicated.  When followed by a phrase such as
+\ "figure 8.30", figure 8.30 of this book is indicated.
+
+\ For explanation of the USB technical terms used in these files, see
+\ one of the above references.

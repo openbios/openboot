@@ -1,0 +1,105 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: isa.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)isa.tok 1.1 06/02/16 
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+fcode-version3
+
+fload ${BP}/dev/southbridge/ontario/config.fth
+fload ${BP}/dev/southbridge/isa/isa.fth
+fload ${BP}/dev/southbridge/ontario/isa/init.fth
+
+fload ${BP}/dev/utilities/probe.fth
+
+1 encode-int " #interrupt-cells" property
+h# 3 encode-int h# ffffff en+ h# f en+ " interrupt-map-mask" property
+
+\ Need to point to pci leaf B for interrupt handling
+\ ebus is not a child of pci on Fire
+" /pci@7c0" find-package if
+   is my-interrupt-parent
+else
+   cmn-fatal[ " interrupt-map is broken" ]cmn-end
+then
+
+: isa-device$ ( pa.lo pa.hi -- adr,len )
+   encode-unit " isa-" probed-device$
+   swap >r tuck r@ cmove r> ca+
+   swap >r tuck r@ cmove r> ca+
+   probed-device$ tuck -
+;
+' isa-device$ is make-probe-device$
+
+
+fload ${BP}/pkg/asr/prober-support.fth
+fload ${BP}/dev/utilities/cif.fth
+
+defer package-to-path  0 " package-to-path" do-cif is package-to-path
+h#  80 buffer: devname
+
+: phandle>devname ( phandle -- buf,len )
+   >r  devname h# 80 over r> package-to-path		( buf,len )
+;
+
+: asr-device-disabled?  ( dev#$ -- disabled? )
+   my-self ihandle>phandle phandle>devname      ( reg$' nexus$ )
+   2swap 		asr-query		( build-it? )
+   0=			( true | false )
+;
+
+open-asr-package if
+
+   " 3f8"	\ ttya dev#$
+   asr-device-disabled? 0= if
+      \ my-space
+      \    my-address	probe?	intr    ino	locn
+      0	h# 3f8	-1	1	h# 2	0 0	 probe-table!	\ ttya
+      build-probed-nodes
+   then
+
+else
+   cmn-error[ " Could not open asr package." ]cmn-end
+then
+
+end0

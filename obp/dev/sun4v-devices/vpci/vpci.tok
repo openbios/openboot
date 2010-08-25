@@ -1,0 +1,101 @@
+\ ========== Copyright Header Begin ==========================================
+\ 
+\ Hypervisor Software File: vpci.tok
+\ 
+\ Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+\ 
+\  - Do no alter or remove copyright notices
+\ 
+\  - Redistribution and use of this software in source and binary forms, with 
+\    or without modification, are permitted provided that the following 
+\    conditions are met: 
+\ 
+\  - Redistribution of source code must retain the above copyright notice, 
+\    this list of conditions and the following disclaimer.
+\ 
+\  - Redistribution in binary form must reproduce the above copyright notice,
+\    this list of conditions and the following disclaimer in the
+\    documentation and/or other materials provided with the distribution. 
+\ 
+\    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+\ may be used to endorse or promote products derived from this software 
+\ without specific prior written permission. 
+\ 
+\     This software is provided "AS IS," without a warranty of any kind. 
+\ ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+\ INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+\ PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+\ MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+\ ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+\ DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+\ OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+\ FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+\ DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+\ ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+\ SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+\ 
+\ You acknowledge that this software is not designed, licensed or
+\ intended for use in the design, construction, operation or maintenance of
+\ any nuclear facility. 
+\ 
+\ ========== Copyright Header End ============================================
+id: @(#)vpci.tok 1.2 06/05/10
+purpose: 
+copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+copyright: Use is subject to license terms.
+
+fcode-version3
+
+headerless
+
+fload ${BP}/dev/sun4v-devices/vpci/hv-iface.fth
+fload ${BP}/dev/sun4v-devices/vpci/common.fth
+fload ${BP}/dev/sun4v-devices/iommu/iommu.fth
+fload ${BP}/dev/sun4v-devices/vpci/msi-props.fth
+
+fload ${BP}/dev/sun4v-devices/vpci/bus-ops.fth
+fload ${BP}/dev/pci/pcibus.fth
+
+: enx+ ( xdr,len x -- xdr,len ) xlsplit swap >r en+ r> en+ ;
+
+0 h# 8000.0000 lxjoin constant 4v-io-type
+
+: make-reg-prop ( -- )
+   0 0 encode-bytes
+   0 my-space lxjoin enx+ 			0 enx+		\ cfg-handle
+   " reg" property
+;
+
+: make-ranges ( I/O /io Mem32 /mem32 Mem64 /mem64-- )
+  >r >r                                ( I/O /io Mem32 /mem32)
+  >r >r                                (  I/O /io )
+  >r >r                                ( -- )
+  0 0 encode-bytes                     ( xdr,len )
+
+  h# 0100.0000 en+ 0 en+ 0 en+         \ PCI I/O
+  r> 4v-io-type or enx+  r> enx+	\ Offset, len
+
+  h# 0200.0000 en+ 0 en+ 0 en+         \ PCI Mem 32
+  r> 4v-io-type or enx+  r> enx+	\ Offset, len
+
+  h# 0300.0000 en+ 0 en+ 0 en+         \ PCI Mem 64
+  r> 4v-io-type or enx+  r> enx+	\ Offset, len
+
+  " ranges" property                   ( -- )
+;
+
+fload ${BP}/dev/sun4v-devices/vpci/methods.fth
+
+pci-iobase pci-iosize				\ IO spaces
+pci-mem32base pci-mem32size			\ memory spaces
+pci-mem64base pci-mem64size
+make-ranges
+
+make-reg-prop
+
+fload ${BP}/pkg/asr/pci-prober-support.fth
+
+1meg  pci-mem32size  over -  my-memlist  free-memrange
+0     pci-iosize     over -  my-io-list  free-memrange
+
+end0

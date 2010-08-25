@@ -1,0 +1,393 @@
+# ========== Copyright Header Begin ==========================================
+# 
+# Hypervisor Software File: dropins.src
+# 
+# Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+# 
+#  - Do no alter or remove copyright notices
+# 
+#  - Redistribution and use of this software in source and binary forms, with 
+#    or without modification, are permitted provided that the following 
+#    conditions are met: 
+# 
+#  - Redistribution of source code must retain the above copyright notice, 
+#    this list of conditions and the following disclaimer.
+# 
+#  - Redistribution in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution. 
+# 
+#    Neither the name of Sun Microsystems, Inc. or the names of contributors 
+# may be used to endorse or promote products derived from this software 
+# without specific prior written permission. 
+# 
+#     This software is provided "AS IS," without a warranty of any kind. 
+# ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, 
+# INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A 
+# PARTICULAR PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN 
+# MICROSYSTEMS, INC. ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR 
+# ANY DAMAGES SUFFERED BY LICENSEE AS A RESULT OF USING, MODIFYING OR 
+# DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN 
+# OR ITS LICENSORS BE LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR 
+# FOR DIRECT, INDIRECT, SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE 
+# DAMAGES, HOWEVER CAUSED AND REGARDLESS OF THE THEORY OF LIABILITY, 
+# ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF 
+# SUN HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+# 
+# You acknowledge that this software is not designed, licensed or
+# intended for use in the design, construction, operation or maintenance of
+# any nuclear facility. 
+# 
+# ========== Copyright Header End ============================================
+# id: @(#)dropins.src  1.3  06/06/28
+# purpose: 
+# copyright: Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved
+# copyright: Use is subject to license terms.
+#
+#
+# Format:	key	<data>
+#		build	<command to run>
+#		depend	<file>
+#		target	<dropin-src> <dropin-name>
+#		source{	[code] terminated by }source
+#		include <file>
+#
+version2
+
+# create the code to execute fcode dropins
+source{
+" /packages/SUNW,builtin-drivers" find-device
+
+   headerless
+   : load-driver ( str$ -- )
+      find-drop-in  if		( adr,len )
+         >r dup >r  1 byte-load	(  )
+	 r> r> free-drop-in	(  )
+      then			(  )
+   ;
+   headers
+
+   : interrupt-property ( n -- )  " interrupts" integer-property  ;
+
+   : get-fcode  ( adr1 len1 adr2 len2 -- true | false )
+      find-drop-in  if
+         2dup >r >r
+         rot min  rot swap  move
+         r> r> free-drop-in
+         true
+      else  2drop false
+      then
+   ;
+
+\ the proper value here is dependent on the particular OBP
+\ implementation, especially the depth of the return stack.
+\ the value is internal to the two external words.  they
+\ are used by the onboard usb host adapter code and the
+\ onboard usb fcode modules
+\   6 value onboard-usb-depth-remaining	\ full usb tree
+   3 value onboard-usb-depth-remaining
+
+   external
+
+   : onboard-usb-max-depth  ( n -- )
+      to onboard-usb-depth-remaining
+   ;
+
+   : onboard-usb-recurse?  ( -- current-level )
+      onboard-usb-depth-remaining dup  if
+         dup 1- to onboard-usb-depth-remaining
+      then
+   ;
+
+   headers
+
+}source
+
+build		${MAKEDI}
+
+target		bootprom.bin	bootprom
+
+depend          ${BP}/dev/southbridge/ontario/isa/depend.mk
+target          isa.fc         SUNW,isa
+source{
+    0 value local-bus-number
+    : en+ ( xdr,len int -- xdr',len' )  encode-int encode+  ;
+    : <firesb> ( xdr,len unit intr -- xdr,len )
+         >r 0 0 rot			      ( pa.lo pa.mid unit )
+         dup h# f and h# 100 *   	      ( pa.lo pa.mid unit pa.hi' )
+         swap 4 >> h# f and h# 800 * +        ( pa.lo pa.mid pa.hi' )
+         local-bus-number +		      ( pa.lo pa.mid pa.hi' )
+         rot >r swap >r                       ( pa.hi )
+         en+ r> en+ r> en+ r> en+             ( xdr,len )
+         " /pci@7c0" find-package drop en+    ( xdr,len )
+   ;
+   \ Load the ISA bridge driver
+   : class060100 ( -- )
+      " SUNW,isa" load-driver
+      " /pci@7c0/pci@0/pci@2/pci@0,2/sound@1" find-package if delete-device drop then
+      " /pci@7c0/pci@0/pci@1/pci@0/sound@1"   find-package if delete-device drop then 
+      my-space h# f0000 and to local-bus-number
+      my-self my-parent to my-self >r
+      1          encode-int " #interrupt-cells" property
+      h# fff800  encode-int
+      0	   en+
+      0	   en+
+      7	   en+  " interrupt-map-mask" property
+      0 0 encode-bytes
+      5.0 1  <firesb>  1 en+              \ USB IRQ6
+      6.0 1  <firesb>  3 en+              \ USB2 IRQ7
+      8.0 1  <firesb>  4 en+              \ IDE IRQ10
+      " interrupt-map" property
+      r> to my-self
+   ;
+}source
+
+depend          ${BP}/dev/sun4v-devices/vnexus/depend.mk
+target          vnexus.fc         SUNW,vnexus
+source{
+   : onboard-devices ( -- )
+      diagnostic-mode? if
+         ." Loading onboard drivers: "
+      then
+      0 0 " 100" " /" begin-package
+         " SUNW,vnexus" load-driver
+      end-package   
+   ;
+}source
+
+# Fonts
+depend		${BP}/pkg/termemu/fonts.mk
+external	font.di
+
+# Sunlogo
+depend          ${BP}/pkg/sunlogo/logo.mk
+external        sun-logo.di
+
+# Keyboard Translator Package
+depend          ${BP}/pkg/keyboard/translator/kbdtrans.mk
+external        kbdtrans.di
+
+# Sun USB Keyboard Tables 
+depend          ${BP}/pkg/keyboard/tables/usb/keyboard.mk
+external        usbkbds.di
+
+# Network boot support package
+depend		${BP}/pkg/netinet/obptftp.mk
+external	obptftp.di
+
+# ASR attach point
+source{
+   fload ${BP}/pkg/sun4v-asr/attach.fth
+}source
+
+# ASR Package
+depend          ${BP}/pkg/sun4v-asr/asr.mk
+external        asr.di
+
+# Fire (JBus to PCI-Express bridge)
+depend		${BP}/dev/sun4v-devices/vpci/depend.mk
+depend		${BP}/dev/sun4v-devices/fire/master-pcia/depend.mk
+depend		${BP}/dev/sun4v-devices/fire/master-pcib/depend.mk
+target		vpci.fc		sun4v-vpci
+buildoptions    vpci.fc:=	FTHFLAGS += [define] VPCI
+buildoptions    vpci.fc:= 	FTHFLAGS += [define] FIRE?
+buildoptions    vpci.fc:= 	FTHFLAGS += [define] 64BIT-ASSIGNED?
+target		master-pcia.fc		jbus-1e
+target		master-pcib.fc		jbus-1f
+source{
+   : pciex-7c0 ( -- )
+        " jbus-1f" load-driver " sun4v-vpci" load-driver
+   ;
+   : pciex-780 ( -- )
+        " jbus-1e" load-driver " sun4v-vpci" load-driver
+   ;  
+}source
+
+# Intel Gigabit Ethernet
+# message		XXX Ophir device pathnames are hard coded
+depend          ${BP}/dev/network/ophir/depend.mk
+target          ophir.fc                ophir
+source{
+   : $= ( adr1 len1 adr2 len2 -- same? )
+   rot tuck =  if  comp 0=  else  3drop false  then
+   ;
+
+   \ Use the subsystem vendor id 0x108e for Sun so we ensure that
+   \ we don't attach the Ophir driver to PCI-E cards. If we do,
+   \ it's possible that the Ophir driver could blow away the EEPROM
+   \ MAC, and the system wouldn't be able to recover the MAC.
+   : pciex8086,105e.108e.105e ( -- )
+   
+	\ Create local-mac-address property. Copy from system mac addr.
+	system-mac-address		( mac-addr len )
+	here 2dup >r >r swap allot r@ ( mac-addr vaddr len r: vaddr len )
+
+	move r> r> 			( len vaddr )
+
+	0 over 6 3 do 			( len vaddr 0 vaddr )
+	  dup i + c@ swap		\ Fetch low-order three bytes of MAC
+        loop drop bljoin lbflip		( len vaddr low-order-mac )
+	dup h# FFFFFF = if
+	  ." Invalid system MAC address." cr
+	else				( len vaddr low-order-mac )
+          \ phandle>devname requires a 'reg' property and a 'name' for the
+          \ results to be deterministic, but we don't load the driver until
+          \ later so we check the parent.
+	  my-parent ihandle>phandle phandle>devname 	( len vaddr low-order-mac dev$ )	
+	  2dup " /pci@780/pci@0/pci@1" $= if		( len vaddr low-order-mac dev$ )
+             2drop my-space h# ff00 and 0<> if 1+ then	( len vaddr low-order-mac )
+          else						( len vaddr low-order-mac dev$ )
+             " /pci@7c0/pci@0/pci@2" $= if		( len vaddr low-order-mac )
+                my-space h# ff00 and 0= if 2 else 3 then + ( len vaddr low-order-mac )
+             else
+                abort                
+             then
+	  then
+	then			( len vaddr low-order-mac' )
+	over >r lbsplit drop r>       	( len vaddr m5 m4 m3 vaddr )
+	6 3 do
+	  tuck i + c!
+	loop drop			( len vaddr )
+
+	\ Create the property
+	swap encode-bytes " local-mac-address" property
+
+	\ Bring the driver in   
+   	" ophir" load-driver
+
+   ;
+
+}source
+
+# virtual flashprom support
+depend		${BP}/dev/sun4v-devices/flashprom/depend.mk
+target		flashprom.fc	sun4v-flashprom
+source{
+   : flashprom-virtual-device ( -- )	" sun4v-flashprom" load-driver ;
+}source
+
+# virtual console support 
+depend		${BP}/dev/sun4v-devices/console/depend.mk
+target		console.fc	sun4v-console
+source{
+   :  console-virtual-device ( -- )	" sun4v-console" load-driver  ;
+}source
+
+# legion disk
+depend          ${BP}/dev/sun4v-devices/legion-disk/depend.mk
+target          sim-disk.fc     legion-disk
+source{
+   : disk-virtual-device ( -- ) " legion-disk" load-driver ;
+}source
+
+# legion NVRAM
+depend          ${BP}/dev/sun4v-devices/legion-nvram/depend.mk
+target          sim-nvram.fc    legion-nvram
+source{
+   : nvram-virtual-device ( -- )  " legion-nvram" load-driver ;
+}source
+
+# NVRAM SVC
+depend		${BP}/dev/sun4v-devices/nvram/depend.mk
+target		nvram.fc	sun4v-nvram
+source{
+   : nvram-svc-virtual-device ( -- )	" sun4v-nvram" load-driver ;
+}source
+
+# hypervisor TOD
+depend		${BP}/dev/sun4v-devices/tod/depend.mk
+target		tod.fc	sun4v-tod
+source{
+   : tod-virtual-device ( -- )	" sun4v-tod" load-driver ;
+}source
+
+# Niagara Crypto Provider
+depend          ${BP}/dev/sun4v-devices/ncp/depend.mk
+target          ncp.fc sun4v-ncp
+source{
+   :  ncp-virtual-device ( -- )   " sun4v-ncp" load-driver ;
+}source
+
+# Service channel 
+depend		${BP}/dev/sun4v-devices/svc-channel/depend.mk
+target		svc-channel.fc	svc-channel
+source{
+   : svc-virtual-device ( -- )	" svc-channel" load-driver ;
+}source
+
+# Dec bridge
+depend          ${BP}/dev/pci-bridge/dec21152/depend.mk
+target		dec21152.fc	class060400
+source{
+    : class060400 ( -- ) 
+       " class060400" load-driver 
+    ;
+}source
+
+# Legacy Southbridge Support below
+
+# Serial line A
+depend		${BP}/dev/southbridge/isa-devices/serial/depend.mk
+target		serial.fc	SUNW,tty
+source{
+   : isa-0,3f8 ( -- )
+      " ttya" encode-string " console" property
+      " SUNW,tty" load-driver
+      " console" delete-property
+   ;
+}source
+
+# an IDE controller
+depend		${BP}/dev/ide/pci/depend.mk
+target		ide.fc		class010100
+source{
+   : class010100 ( -- )  " class010100" load-driver ;
+   alias class01018a class010100
+   alias class01018f class010100
+   alias class0101ff class010100
+}source
+
+# onboard USB driver
+depend          ${BP}/dev/southbridge/usb/depend.mk
+target          southusb.fc          usb
+source{
+   : pci10b9,5237  ( -- )
+      1 interrupt-property
+      " usb" load-driver
+   ;
+}source
+
+depend          ${BP}/dev/usb-devices/device/depend.mk
+target          device.fc       device
+source{
+   : device  ( -- adr len true | false )  " device" get-fcode  ;
+}source
+
+depend          ${BP}/dev/usb-devices/combined/depend.mk
+target          combined.fc     combined
+source{
+   : combined  ( -- adr len true | false )  " combined" get-fcode  ;
+}source
+
+depend          ${BP}/dev/usb-devices/interface/depend.mk
+target          interface.fc    interface
+source{
+   : interface  ( -- adr len true | false )  " interface" get-fcode ;
+}source
+
+depend          ${BP}/dev/usb-devices/hub/depend.mk
+target          hub.fc          hub
+source{
+   : hub  ( -- adr len true | false )  " hub" get-fcode  ;
+}source
+
+depend          ${BP}/dev/usb-devices/kbd/depend.mk
+target          usbkbd.fc          kbd
+source{
+   : kbd  ( -- adr len true | false )  " kbd" get-fcode  ;
+}source
+
+# finish the dropins
+source{
+device-end
+}source

@@ -1,0 +1,9 @@
+id: @(#)dec21152.tok 1.1 99/11/30
+purpose: Load file for PCI probe code
+copyright: Copyright 1994 Firmworks  All Rights Reserved
+
+FCode-version2
+
+fload ${BP}/dev/pci-bridge/dec21152/pcibridg.fth
+
+end0
